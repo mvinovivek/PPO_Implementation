@@ -14,4 +14,4 @@ hyperparameters = {
 
 env = gym.make('Pendulum-v1')
 ppo = PPO(env, hyperparameters)
-ppo.learn(100)
+ppo.learn(10000)

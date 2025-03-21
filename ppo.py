@@ -1,4 +1,5 @@
 from networks import FeedForwardNetwork
+import time
 import torch
 from torch.distributions import MultivariateNormal
 from torch.optim import Adam
@@ -38,6 +39,15 @@ class PPO():
         self.cov_var = torch.full(size=(self.act_dim, ), fill_value=0.5)
         self.cov_mat = torch.diag(self.cov_var)
 
+        self.logger = {
+            'delta_t': time.time_ns(),
+            't_so_far': 0,
+            'i_so_far': 0,
+            'batch_lens': [],
+            'batch_rews': [],
+            'actor_losses': []
+        }
+
     def learn(self, total_timesteps):
         """
         Train the actor and the critic networks. The Main algorithm of PPO is implemented in this function
@@ -48,10 +58,18 @@ class PPO():
         Returns: None        
         """
         t_so_far = 0
+        i_so_far = 0
         while t_so_far < total_timesteps:
+
             batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens = self.rollout(
             )
+
             t_so_far += np.sum(batch_lens)
+            i_so_far += 1
+
+            self.logger['t_so_far'] = t_so_far
+            self.logger['i_so_far'] = i_so_far
+
             V, _ = self.evaluate(batch_obs, batch_acts)
             advantage_at_k = batch_rtgs - V.detach()
 
@@ -75,6 +93,10 @@ class PPO():
                 self.critic_optim.zero_grad()
                 critic_loss.backward()
                 self.critic_optim.step()
+
+                self.logger['actor_losses'].append(actor_loss.detach())
+
+            self._log_summary()
 
     def rollout(self):
         batch_obs = []
@@ -107,7 +129,8 @@ class PPO():
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
         batch_rtgs = self.compute_rtgs(batch_rews)
-
+        self.logger['batch_rews'] = batch_rews
+        self.logger['batch_lens'] = batch_lens
         return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
 
     def _init_hyperparameters(self, hyperparameters: dict):
@@ -154,3 +177,40 @@ class PPO():
         dist = MultivariateNormal(mean, self.cov_mat)
         log_probs = dist.log_prob(batch_acts)
         return V, log_probs
+
+    def _log_summary(self):
+        delta_t = self.logger['delta_t']
+        self.logger['delta_t'] = time.time_ns()
+        delta_t = (self.logger['delta_t'] - delta_t) / 1e9
+        delta_t = str(round(delta_t, 2))
+        t_so_far = self.logger['t_so_far']
+        i_so_far = self.logger['i_so_far']
+        avg_ep_lens = np.mean(self.logger['batch_lens'])
+        avg_ep_rews = np.mean(
+            [np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
+        avg_actor_loss = np.mean(
+            [losses.float().mean() for losses in self.logger['actor_losses']])
+
+        # Round decimal places for more aesthetic logging messages
+        avg_ep_lens = str(round(avg_ep_lens, 2))
+        avg_ep_rews = str(round(avg_ep_rews, 2))
+        avg_actor_loss = str(round(avg_actor_loss, 5))
+
+        # Print logging statements
+        print(flush=True)
+        print(
+            f"-------------------- Iteration #{i_so_far} --------------------",
+            flush=True)
+        print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
+        print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
+        print(f"Average Loss: {avg_actor_loss}", flush=True)
+        print(f"Timesteps So Far: {t_so_far}", flush=True)
+        print(f"Iteration took: {delta_t} secs", flush=True)
+        print(f"------------------------------------------------------",
+              flush=True)
+        print(flush=True)
+
+        # Reset batch-specific logging data
+        self.logger['batch_lens'] = []
+        self.logger['batch_rews'] = []
+        self.logger['actor_losses'] = []
