@@ -6,6 +6,7 @@ from torch.optim import Adam
 import torch.nn as nn
 import numpy as np
 import gymnasium as gym
+from tqdm import tqdm
 
 
 class PPO:
@@ -57,13 +58,15 @@ class PPO:
 
         Returns: None
         """
+        progress_bar = tqdm(total=total_timesteps, desc="\nTraining")
         t_so_far = 0
         i_so_far = 0
         while t_so_far < total_timesteps:
             batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens = (
                 self.rollout())
 
-            t_so_far += np.sum(batch_lens)
+            to_update = np.sum(batch_lens)
+            t_so_far += to_update
             i_so_far += 1
 
             self.logger["t_so_far"] = t_so_far
@@ -96,22 +99,27 @@ class PPO:
                 self.logger["actor_losses"].append(actor_loss.detach())
 
             self._log_summary()
+            progress_bar.update(to_update)
+
             # Saving the model
-            if int(t_so_far % self.save_freq) == 0:
-                self.save_model(timestep=t_so_far)
+            if self.save_intervals:
+                if int(t_so_far % self.save_freq) == 0:
+                    self.save_model(timestep=t_so_far)
+
+        progress_bar.close()
 
     def save_model(self, timestep: int = None):
         if timestep is None:
             torch.save(self.actor.state_dict(), "./ppo_actor.pth")
             torch.save(self.critic.state_dict(), "./ppo_critic.pth")
-            print("Saved Model!")
+            print("\nSaved Model!")
 
         else:
             torch.save(self.actor.state_dict(),
                        f"./ppo_actor_at_{timestep}.pth")
             torch.save(self.critic.state_dict(),
                        f"./ppo_critic_at_{timestep}.pth")
-            print(f"Saved Model at Timestep :{timestep}")
+            print(f"\nSaved Model at Timestep :{timestep}")
 
     def rollout(self):
         batch_obs = []
@@ -212,6 +220,7 @@ class PPO:
 
         # Print logging statements
         print(flush=True)
+        print("\n")
         print(
             f"-------------------- Iteration #{i_so_far} --------------------",
             flush=True,

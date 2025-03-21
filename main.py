@@ -10,10 +10,11 @@ hyperparameters = {
     'clip': 0.2,
     'render': True,
     'render_every_i': 10,
-    'save_freq': 200
+    'save_intervals': False,
+    'save_freq': 2000
 }
 
 env = gym.make('Pendulum-v1')
 ppo = PPO(env, hyperparameters)
-ppo.learn(10000)
-ppo.save_model()
+ppo.learn(1000)
+# ppo.save_model()
