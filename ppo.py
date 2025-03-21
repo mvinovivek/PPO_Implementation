@@ -4,12 +4,26 @@ from torch.distributions import MultivariateNormal
 from torch.optim import Adam
 import torch.nn as nn
 import numpy as np
+import gymnasium as gym
 
 
 class PPO():
 
-    def __init__(self, env):
-        self._init_hyperparameters()
+    def __init__(self, env: gym.Env, hyperparameters: dict):
+        """
+        Initializing the PPO Model
+         
+        Parameters : 
+        1. env - Any Gym Environment
+        2. Hyperparameters
+
+        Returns : None
+        """
+
+        assert (type(env.observation_space) is gym.spaces.Box)
+        assert (type(env.action_space) is gym.spaces.Box)
+
+        self._init_hyperparameters(hyperparameters)
 
         self.env = env
         self.obs_dim = env.observation_space.shape[0]
@@ -25,6 +39,14 @@ class PPO():
         self.cov_mat = torch.diag(self.cov_var)
 
     def learn(self, total_timesteps):
+        """
+        Train the actor and the critic networks. The Main algorithm of PPO is implemented in this function
+
+        Parameters: 
+        1. total_timesteps - The total number of timesteps the algorithms should be trained for
+
+        Returns: None        
+        """
         t_so_far = 0
         while t_so_far < total_timesteps:
             batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens = self.rollout(
@@ -88,13 +110,24 @@ class PPO():
 
         return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
 
-    def _init_hyperparameters(self):
+    def _init_hyperparameters(self, hyperparameters: dict):
+
+        #Algorithm Hyperparameters
         self.timesteps_per_batch = 4800
         self.max_timesteps_per_episode = 1600
-        self.gamma = 0.95
         self.n_updates_per_iteration = 5
-        self.clip = 0.2
         self.lr = 0.005
+        self.gamma = 0.95
+        self.clip = 0.2
+
+        # Miscellaneous parameters
+        self.render = True
+        self.render_every_i = 10
+        self.save_freq = 10
+        self.seed = None
+
+        for param, val in hyperparameters.items():
+            exec('self.' + param + '=' + str(val))
 
     def get_action(self, obs):
         mean = self.actor(obs)
