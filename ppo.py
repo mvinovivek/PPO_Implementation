@@ -8,21 +8,21 @@ import numpy as np
 import gymnasium as gym
 
 
-class PPO():
+class PPO:
 
     def __init__(self, env: gym.Env, hyperparameters: dict):
         """
         Initializing the PPO Model
-         
-        Parameters : 
+
+        Parameters :
         1. env - Any Gym Environment
         2. Hyperparameters
 
         Returns : None
         """
 
-        assert (type(env.observation_space) is gym.spaces.Box)
-        assert (type(env.action_space) is gym.spaces.Box)
+        assert type(env.observation_space) is gym.spaces.Box
+        assert type(env.action_space) is gym.spaces.Box
 
         self._init_hyperparameters(hyperparameters)
 
@@ -40,35 +40,34 @@ class PPO():
         self.cov_mat = torch.diag(self.cov_var)
 
         self.logger = {
-            'delta_t': time.time_ns(),
-            't_so_far': 0,
-            'i_so_far': 0,
-            'batch_lens': [],
-            'batch_rews': [],
-            'actor_losses': []
+            "delta_t": time.time_ns(),
+            "t_so_far": 0,
+            "i_so_far": 0,
+            "batch_lens": [],
+            "batch_rews": [],
+            "actor_losses": [],
         }
 
     def learn(self, total_timesteps):
         """
         Train the actor and the critic networks. The Main algorithm of PPO is implemented in this function
 
-        Parameters: 
+        Parameters:
         1. total_timesteps - The total number of timesteps the algorithms should be trained for
 
-        Returns: None        
+        Returns: None
         """
         t_so_far = 0
         i_so_far = 0
         while t_so_far < total_timesteps:
-
-            batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens = self.rollout(
-            )
+            batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens = (
+                self.rollout())
 
             t_so_far += np.sum(batch_lens)
             i_so_far += 1
 
-            self.logger['t_so_far'] = t_so_far
-            self.logger['i_so_far'] = i_so_far
+            self.logger["t_so_far"] = t_so_far
+            self.logger["i_so_far"] = i_so_far
 
             V, _ = self.evaluate(batch_obs, batch_acts)
             advantage_at_k = batch_rtgs - V.detach()
@@ -80,8 +79,8 @@ class PPO():
                 V, cur_log_probs = self.evaluate(batch_obs, batch_acts)
                 ratios = torch.exp(cur_log_probs - batch_log_probs)
                 surr1 = ratios * advantage_at_k
-                surr2 = torch.clamp(ratios, 1 - self.clip,
-                                    1 + self.clip) * advantage_at_k
+                surr2 = (torch.clamp(ratios, 1 - self.clip, 1 + self.clip) *
+                         advantage_at_k)
 
                 actor_loss = (-torch.min(surr1, surr2)).mean()
                 critic_loss = nn.MSELoss()(V, batch_rtgs)
@@ -94,9 +93,25 @@ class PPO():
                 critic_loss.backward()
                 self.critic_optim.step()
 
-                self.logger['actor_losses'].append(actor_loss.detach())
+                self.logger["actor_losses"].append(actor_loss.detach())
 
             self._log_summary()
+            # Saving the model
+            if int(t_so_far % self.save_freq) == 0:
+                self.save_model(timestep=t_so_far)
+
+    def save_model(self, timestep: int = None):
+        if timestep is None:
+            torch.save(self.actor.state_dict(), "./ppo_actor.pth")
+            torch.save(self.critic.state_dict(), "./ppo_critic.pth")
+            print("Saved Model!")
+
+        else:
+            torch.save(self.actor.state_dict(),
+                       f"./ppo_actor_at_{timestep}.pth")
+            torch.save(self.critic.state_dict(),
+                       f"./ppo_critic_at_{timestep}.pth")
+            print(f"Saved Model at Timestep :{timestep}")
 
     def rollout(self):
         batch_obs = []
@@ -129,13 +144,12 @@ class PPO():
         batch_acts = torch.tensor(batch_acts, dtype=torch.float)
         batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
         batch_rtgs = self.compute_rtgs(batch_rews)
-        self.logger['batch_rews'] = batch_rews
-        self.logger['batch_lens'] = batch_lens
+        self.logger["batch_rews"] = batch_rews
+        self.logger["batch_lens"] = batch_lens
         return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
 
     def _init_hyperparameters(self, hyperparameters: dict):
-
-        #Algorithm Hyperparameters
+        # Algorithm Hyperparameters
         self.timesteps_per_batch = 4800
         self.max_timesteps_per_episode = 1600
         self.n_updates_per_iteration = 5
@@ -150,7 +164,7 @@ class PPO():
         self.seed = None
 
         for param, val in hyperparameters.items():
-            exec('self.' + param + '=' + str(val))
+            exec("self." + param + "=" + str(val))
 
     def get_action(self, obs):
         mean = self.actor(obs)
@@ -179,17 +193,17 @@ class PPO():
         return V, log_probs
 
     def _log_summary(self):
-        delta_t = self.logger['delta_t']
-        self.logger['delta_t'] = time.time_ns()
-        delta_t = (self.logger['delta_t'] - delta_t) / 1e9
+        delta_t = self.logger["delta_t"]
+        self.logger["delta_t"] = time.time_ns()
+        delta_t = (self.logger["delta_t"] - delta_t) / 1e9
         delta_t = str(round(delta_t, 2))
-        t_so_far = self.logger['t_so_far']
-        i_so_far = self.logger['i_so_far']
-        avg_ep_lens = np.mean(self.logger['batch_lens'])
+        t_so_far = self.logger["t_so_far"]
+        i_so_far = self.logger["i_so_far"]
+        avg_ep_lens = np.mean(self.logger["batch_lens"])
         avg_ep_rews = np.mean(
-            [np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
+            [np.sum(ep_rews) for ep_rews in self.logger["batch_rews"]])
         avg_actor_loss = np.mean(
-            [losses.float().mean() for losses in self.logger['actor_losses']])
+            [losses.float().mean() for losses in self.logger["actor_losses"]])
 
         # Round decimal places for more aesthetic logging messages
         avg_ep_lens = str(round(avg_ep_lens, 2))
@@ -200,17 +214,18 @@ class PPO():
         print(flush=True)
         print(
             f"-------------------- Iteration #{i_so_far} --------------------",
-            flush=True)
+            flush=True,
+        )
         print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
         print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
         print(f"Average Loss: {avg_actor_loss}", flush=True)
         print(f"Timesteps So Far: {t_so_far}", flush=True)
         print(f"Iteration took: {delta_t} secs", flush=True)
-        print(f"------------------------------------------------------",
+        print("------------------------------------------------------",
               flush=True)
         print(flush=True)
 
         # Reset batch-specific logging data
-        self.logger['batch_lens'] = []
-        self.logger['batch_rews'] = []
-        self.logger['actor_losses'] = []
+        self.logger["batch_lens"] = []
+        self.logger["batch_rews"] = []
+        self.logger["actor_losses"] = []

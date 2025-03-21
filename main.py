@@ -2,16 +2,18 @@ import gymnasium as gym
 from ppo import PPO
 
 hyperparameters = {
-    'timesteps_per_batch': 2048,
-    'max_timesteps_per_episode': 200,
+    'timesteps_per_batch': 2000,
+    'max_timesteps_per_episode': 500,
     'gamma': 0.99,
     'n_updates_per_iteration': 10,
     'lr': 3e-4,
     'clip': 0.2,
     'render': True,
-    'render_every_i': 10
+    'render_every_i': 10,
+    'save_freq': 200
 }
 
 env = gym.make('Pendulum-v1')
 ppo = PPO(env, hyperparameters)
 ppo.learn(10000)
+ppo.save_model()
