@@ -33,10 +33,8 @@ class PPO:
         self.obs_dim = env.observation_space.shape[0]
         if type(env.action_space) is gym.spaces.Box:
             self.act_dim = env.action_space.shape[0]
-            print(env.action_space.shape)
         else:
             self.act_dim = env.action_space.n
-            print(env.action_space.n)
 
         self.actor = FeedForwardNetwork(self.obs_dim, self.act_dim)
         self.critic = FeedForwardNetwork(self.obs_dim, 1)
@@ -194,8 +192,8 @@ class PPO:
         if type(self.env.action_space) is gym.spaces.Box:
             dist = MultivariateNormal(mean, self.cov_mat)
         else:
-            probs = torch.softmax(mean, dim=-1)
-            dist = Categorical(probs)
+            dist = Categorical(logits=mean)
+
         action = dist.sample()
         log_prob = dist.log_prob(action)
         return action.detach().numpy(), log_prob.detach()
@@ -218,8 +216,7 @@ class PPO:
         if type(self.env.action_space) is gym.spaces.Box:
             dist = MultivariateNormal(mean, self.cov_mat)
         else:
-            probs = torch.softmax(mean, dim=-1)
-            dist = Categorical(probs)
+            dist = Categorical(logits=mean)
         log_probs = dist.log_prob(batch_acts)
         return V, log_probs
 
