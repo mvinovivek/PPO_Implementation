@@ -14,9 +14,7 @@ hyperparameters = {
     "save_freq": 2000,
 }
 
-# env = gym.make("LunarLander-v3", render_mode="human")
-# env = gym.make("MountainCarContinuous-v0")
-env = gym.make("CartPole-v1")
+env = gym.make("BipedalWalker-v3")
 ppo = PPO(env, hyperparameters)
 ppo.learn(10000)
 ppo.save_model()
